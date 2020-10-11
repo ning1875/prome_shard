@@ -1,6 +1,6 @@
 # 开源项目地址: 
 项目地址: [https://github.com/ning1875/prome_shard](https://github.com/ning1875/prome_shard)
-![image](https://github.com/ning1875/prome_shard/blob/main/images/golang_consul_watch.png)
+![image](https://github.com/ning1875/prome_shard/blob/main/images/prome_shard_mon.png)
 # 项目说明
 ## prometheus采集端单点问题
 ### 采集类型
