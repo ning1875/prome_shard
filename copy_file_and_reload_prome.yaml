@@ -1,0 +1,20 @@
+- name:  copy_file_and_reload
+  hosts: all
+  user: root
+  gather_facts:  false
+  vars:
+      target_path: /App/prometheus/sd
+  tasks:
+      - name: copy target file
+        copy:
+          src: '{{ item.src }}'
+          dest: '{{ item.dest }}'
+          owner: root
+          group: root
+          mode: 0644
+          force: true
+        with_items:
+          - { src: './{{ src_sd_file_name }}', dest: '{{ target_path }}/{{ dest_sd_file_name }}' }
+
+      - name: reload_service
+        shell: /usr/bin/curl -X POST http://localhost:{{ service_port }}/-/reload &
