@@ -1,6 +1,9 @@
+# 架构图
+![image](./images/采集端动态分片高可用实战.jpg)
+
 # 开源项目地址: 
 项目地址: [https://github.com/ning1875/prome_shard](https://github.com/ning1875/prome_shard)
-![image](https://github.com/ning1875/prome_shard/blob/main/images/prome_shard_mon.png)
+![image](./images/prome_shard_mon.png)
 # 项目说明
 ## prometheus采集端单点问题
 ### 采集类型
@@ -41,43 +44,43 @@
 
 ## consul watch问题
 - golang 中
-![image](https://github.com/ning1875/prome_shard/blob/main/images/golang_consul_watch.png)
+![image](./images/golang_consul_watch.png)
 在golang中可以轻松做到，代码地址 [开源项目 : dynamic-sharding： 解决pushgateway HA问题(https://segmentfault.com/a/1190000022894798) 
 - 本项目 python中稍微复杂，需要改为blocking query
 ```python
-    def block_get_health(self, service_name, service_hash_map, dq):
-        index = None
-        while True:
-            try:
-                index, d = self.consul.health.service(service_name, passing=True, index=index)
-                if d:
-                    data = d
-                    new_nodes = []
-                    for x in data:
-                        address = x.get("Service").get("Address")
-                        if address:
-                            new_nodes.append(address)
+def block_get_health(self, service_name, service_hash_map, dq):
+    index = None
+    while True:
+        try:
+            index, d = self.consul.health.service(service_name, passing=True, index=index)
+            if d:
+                data = d
+                new_nodes = []
+                for x in data:
+                    address = x.get("Service").get("Address")
+                    if address:
+                        new_nodes.append(address)
 
-                    old_nodes = service_hash_map[service_name].nodes
+                old_nodes = service_hash_map[service_name].nodes
 
-                    if set(old_nodes) != set(new_nodes):
-                        logging.info("[new_num:{} old_num:{}][new_nodes:{} old_nodes:{}]".format(
-                            len(new_nodes),
-                            len(old_nodes),
-                            ",".join(new_nodes),
-                            ",".join(old_nodes),
+                if set(old_nodes) != set(new_nodes):
+                    logging.info("[new_num:{} old_num:{}][new_nodes:{} old_nodes:{}]".format(
+                        len(new_nodes),
+                        len(old_nodes),
+                        ",".join(new_nodes),
+                        ",".join(old_nodes),
 
-                        ))
-                        new_ring = ConsistentHashRing(100, new_nodes)
-                        service_hash_map[service_name] = new_ring
-                        dq.appendleft(str(service_name))
-                        # dq.put(str(service_name))
-                        M_SERVICE_CHANGES.labels(service_name=service_name, old_nodes=len(old_nodes),
-                                                 new_nodes=len(new_nodes)).set(len(new_nodes))
-            except Exception as e:
-                logging.error("[watch_error,service:{},error:{}]".format(service_name, e))
-                time.sleep(5)
-                continue
+                    ))
+                    new_ring = ConsistentHashRing(100, new_nodes)
+                    service_hash_map[service_name] = new_ring
+                    dq.appendleft(str(service_name))
+                    # dq.put(str(service_name))
+                    M_SERVICE_CHANGES.labels(service_name=service_name, old_nodes=len(old_nodes),
+                                             new_nodes=len(new_nodes)).set(len(new_nodes))
+        except Exception as e:
+            logging.error("[watch_error,service:{},error:{}]".format(service_name, e))
+            time.sleep(5)
+            continue
 
 ```
 
@@ -104,14 +107,14 @@ get_targets.py 是prome_shard发现采集targets pool的方法
     def scrape_prome_ecs_inf(cls):
     
 这个方法返回值是发现到的target列表，形如
-```python
+```json
 [{
     "labels": {
       "group": "SGT",
       "env": "prod",
       "service": "scrape_prome",
       "region": "ap-southeast-3",
-      "scrape_type": "vm",
+      "scrape_type": "vm"
     },
     "targets": [
       "1.1.1.1:9090"
