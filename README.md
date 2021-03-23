@@ -45,7 +45,7 @@
 ## consul watch问题
 - golang 中
 ![image](./images/golang_consul_watch.png)
-在golang中可以轻松做到，代码地址 [开源项目 : dynamic-sharding： 解决pushgateway HA问题(https://segmentfault.com/a/1190000022894798) 
+在golang中可以轻松做到，代码地址 [开源项目 : dynamic-sharding： 解决pushgateway HA问题](https://zhuanlan.zhihu.com/p/165205939) 
 - 本项目 python中稍微复杂，需要改为blocking query
 ```python
 def block_get_health(self, service_name, service_hash_map, dq):
