@@ -1,10 +1,5 @@
-import json
-
 import requests
 import logging
-
-import yaml
-
 
 """
 get_targets.py 是prome_shard发现采集targets pool的方法
@@ -136,7 +131,6 @@ class GetTarget(object):
             new_targets.append(dd)
         return new_targets
 
-
     @classmethod
     def scrape_prome_ecs_inf(cls):
         req_data = {
@@ -150,11 +144,28 @@ class GetTarget(object):
                 {'key': 'subgroup', 'value': 'BigData2', 'type': 2},
             ]
         }
+        # TODO mock data
+        targets = []
+        for x in range(1, 100):
+            l = {
+                "targets": [
+                    "172.20.70.{}:9100".format(x)
+                ],
+                "labels": {
+                    "name": "prometheus-master-01",
+                    "account": "aliyun-01",
+                    "region": "ap-south-1",
+                    "env": "prod",
+                    "group": "inf",
+                    "project": "monitor",
+                    "stree_gpa": "inf.monitor.prometheus"
+                }
+            }
+            targets.append(l)
+        return targets
         new_targets = cls.get_ecs_inf_common(req_data)
         return new_targets
 
 
-
 if __name__ == "__main__":
     res = GetTarget.scrape_prome_ecs_inf()
-

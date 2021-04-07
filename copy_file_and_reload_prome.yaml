@@ -3,7 +3,7 @@
   user: root
   gather_facts:  false
   vars:
-      target_path: /App/prometheus/sd
+      target_path: /opt/app/prometheus/sd
   tasks:
       - name: copy target file
         copy:

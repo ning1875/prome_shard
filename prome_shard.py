@@ -1,43 +1,24 @@
-# import atfork
-# 
-# atfork.monkeypatch_os_fork_functions()
-# from atfork import stdlib_fixer
-# 
-# stdlib_fixer.fix_logging_module()
-
 import json
 import logging
 import os
-
-import threadpool
 import yaml
-# import asyncio
 import time
 
-# from multiprocessing import Pool, Queue
-# from multiprocessing.pool import ThreadPool
-# from multiprocessing import Process
-from collections import deque
-from consul_work import start_thread_loop, watch_service, Consul
+from multiprocessing import Process, Queue, Pool, Manager
+from consul_work import Consul
 from get_targets import GetTarget
-from threading import Thread
 from consistent_hash_ring import ConsistentHashRing
 from metrics import *
-from ansi_new import run_play
+from ansi_new import run_play_with_res
+import multiprocessing_logging
 
-# res = run_play(instances, yaml_path, extra_vars=extra_vars)
-# logging.info("[handle_callback] [instances:{}] [res:{}]".format(",".join(instances), json.dumps(res)))
-
+multiprocessing_logging.install_mp_handler()
 logging.basicConfig(
-    # TODO console 日志,上线时删掉
-    # filename=LOG_PATH,
-    format='%(asctime)s %(levelname)s %(filename)s %(funcName)s [line:%(lineno)d]:%(message)s',
+    format='%(asctime)s %(levelname)s %(filename)s [func:%(funcName)s] [line:%(lineno)d]:%(message)s',
     datefmt="%Y-%m-%d %H:%M:%S",
     level="INFO"
 )
-# global vars
-SERVICE_HASH_MAP = {}
-ALL_CONFIG_DIC = {}
+logger = logging.getLogger()
 
 # default vars
 DEFAULT_YAML = "copy_file_and_reload_prome.yaml"
@@ -51,25 +32,25 @@ def load_base_config(yaml_path):
     return config
 
 
-def shard_job(service_name):
-    start = time.clock()
-    func = getattr(GetTarget, service_name)
-    if not func:
+def shard_job(service_name, service_hash_map, config):
+    start = time.perf_counter()
+    has_func = hasattr(GetTarget, service_name)
+    if not has_func:
         logging.error("[reflect_error][func:{}not_found in GetTarget]".format(
             service_name,
         ))
         return
-
-    hash_ring = SERVICE_HASH_MAP.get(service_name)
+    func = getattr(GetTarget, service_name)
+    hash_ring = service_hash_map.get(service_name)
     if not hash_ring:
-        logging.error("[hash_ring_error][func:{} not_found in SERVICE_HASH_MAP]".format(
+        logging.error("[hash_ring_error][func:{} not_found in service_hash_map]".format(
             service_name,
         ))
         return
 
     targets = func()
 
-    end = time.clock()
+    end = time.perf_counter()
     if not targets:
         logging.error("[run_func_error_GetTarget.{}]".format(
             service_name,
@@ -95,15 +76,16 @@ def shard_job(service_name):
         target_node = hash_ring.get_node(str(target_addr_str))
 
         node_map[target_node].append(i)
-    send_target_to_node(service_name, node_map)
+    send_target_to_node(service_name, node_map, config)
 
 
-def send_target_to_node(service_name, node_map):
+def send_target_to_node(service_name, node_map, config):
     all_num = len(node_map)
     if all_num == 0:
         return
 
-    shard_config_dic = ALL_CONFIG_DIC.get("shard_service")
+    shard_config_dic = config.get("shard_service")
+    print(shard_config_dic)
     num = 1
     all_args = []
 
@@ -136,7 +118,6 @@ def send_target_to_node(service_name, node_map):
             service_config_dic.get("dest_sd_file_name", DEFAULT_JSON_FILE),
             node,
             str(service_config_dic.get("port", DEFAULT_PORT)),
-            # "./{}".format(service_config_dic.get("yaml_path", DEFAULT_YAML)),
             service_config_dic.get("yaml_path", DEFAULT_YAML),
 
         ]
@@ -150,29 +131,18 @@ def send_target_to_node(service_name, node_map):
         logging.error("[send_target_to_node_zero_targets][service_name:{}]".format(service_name))
         return
 
-    # multi thread  run
-
-    # pool = ThreadPool(len(all_args))
-    # pool.map(ansible_send_work, all_args)
+    # with Pool(5) as p:
+    #     res = p.starmap(ansible_send_work, all_args)
+    #  daemon子进程不能在通过multiprocessing创建后代进程，否则当父进程退出后，它终结其daemon子进程，那孙子进程就成了孤儿进程了。当尝试这么做时，会报错：AssertionError: daemonic processes are not allowed to have children
     #
-    # pool.close()
-    # pool.join()
 
     for i in all_args:
-        # t = Thread(target=ansible_send_work, kwargs={"args": i})
-        # t.setDaemon(True)
-        # t.start()
-        # ansible_send_work(i)
-        scp_send_work(i)
-
-    # for i in all_args:
-    #     process = Process(target=ansible_send_work, kwargs={'args': i})
-    #     process.start()
-    #     process.join()
+        # scp_send_work(i)
+        ansible_send_work(i)
 
 
 def ansible_send_work(args):
-    start = time.clock()
+    start = time.perf_counter()
     if not isinstance(args, list):
         return
     src_sd_file_name = args[0]
@@ -196,16 +166,16 @@ def ansible_send_work(args):
         "service_port": service_port,
 
     }
-    res = run_play([ip], yaml_path, extra_vars=extra_vars)
+    res = run_play_with_res([ip], yaml_path, extra_vars=extra_vars)
     logging.info(
         "[ansible_send_work_result] [yaml_path:{}][ip:{}] [res:{}]".format(yaml_path, ip, json.dumps(res)))
-    end = time.clock()
+    end = time.perf_counter()
     M_ANSIBLE_TIME.labels(ip=ip, src_sd_file_name=src_sd_file_name, dest_sd_file_name=dest_sd_file_name,
                           service_port=service_port, yaml_path=yaml_path).set(end - start)
 
 
 def scp_send_work(args):
-    start = time.clock()
+    start = time.perf_counter()
     if not isinstance(args, list):
         return
     src_sd_file_name = args[0]
@@ -217,7 +187,7 @@ def scp_send_work(args):
     cmd = "scp  -o StrictHostKeyChecking=no {} {}:/App/prometheus/sd/{}".format(src_sd_file_name, ip, dest_sd_file_name)
     os.popen(cmd)
 
-    end = time.clock()
+    end = time.perf_counter()
 
     msg = "[scp_send_work][src_sd_file_name:{}][dest_sd_file_name:{}][ip:{}][service_port:{}][yaml_path:{}][time_took:{}]".format(
         src_sd_file_name,
@@ -232,50 +202,44 @@ def scp_send_work(args):
                           service_port=service_port, yaml_path=yaml_path).set(end - start)
 
 
-def consumer(sync_dq):
+def consumer(sync_dq, service_hash_map, config):
+    """
+    消费节点变化信息的函数
+    1.重新生成一致性哈希环
+    2.相当于收敛
+    :param sync_dq:
+    :return:
+    """
+    msg = "[start service consumer..[pid:{}]".format(os.getpid())
+    logger.info(msg)
     while True:
-        if sync_dq:
-            msg = sync_dq.popleft()
-            if msg:
-                shard_job(msg)
+        msg = sync_dq.get()
+        if msg:
+            log_line = "[接收到任务][msg:{}]".format(msg)
+            logger.info(log_line)
+            shard_job(msg, service_hash_map, config)
 
 
-def run_sync_target():
+def run_sync_targets(service_hash_map, config):
     while True:
-        services = SERVICE_HASH_MAP.keys()
-
-        for i in services:
-            shard_job(i)
-
-        time.sleep(int(ALL_CONFIG_DIC.get("job_setting").get("ticker_interval", 600)))
-
-
-def run_sync_target_thread():
-    while True:
-        services = SERVICE_HASH_MAP.keys()
-
-        task_pool = threadpool.ThreadPool(20)
-        rets = threadpool.makeRequests(shard_job, services)
-        [task_pool.putRequest(req) for req in rets]
-        task_pool.wait()
-
-        logging.info("[main_loo_run....][service_num:{}][detail:]".format(
+        services = service_hash_map.keys()
+        logging.info("[main_loop_run....][service_num:{}][detail:]".format(
             len(services),
             ",".join(services)
         ))
-        # pool = ThreadPool(len(services))
-        # pool.map(shard_job, services)
-        # 
-        # pool.close()
-        # pool.join()
 
-        time.sleep(int(ALL_CONFIG_DIC.get("job_setting").get("ticker_interval", 600)))
+        for s in services:
+            # 同步的方法
+            # shard_job(s, service_hash_map, config)
+            p = Process(target=shard_job, args=(s, service_hash_map, config))
+            p.start()
+            p.join(timeout=3)
+
+        time.sleep(int(config.get("job_setting").get("ticker_interval", 60)))
 
 
 def run(yaml_path):
     config = load_base_config(yaml_path)
-    global ALL_CONFIG_DIC
-    ALL_CONFIG_DIC = config
     shard_service_d = config.get("shard_service")
 
     logging.info("[start_for_service][service_num:{}][detail:{}]".format(
@@ -283,55 +247,67 @@ def run(yaml_path):
         ",".join(shard_service_d.keys()),
 
     ))
-    # queue
+    # 1.创建一个Manger对象
+    manager = Manager()
 
-    sync_dq = deque()
+    # 2. 创建一个 全局一致性哈希map
+    service_hash_map = manager.dict()
+    # 同步的队列，用来通知是哪个采集服务节点发生收敛了
+    sync_q = Queue()
 
     # consul
     consul_addr = config.get("consul").get("host")
     consul_port = int(config.get("consul").get("port"))
     consul_obj = Consul(consul_addr, consul_port)
 
-    # 注册服务 && 初始化hash-map
+    # step_1 注册服务 && 初始化hash-map
+    # 获取consul所有服务
+
+    all_service = consul_obj.get_all_service()
     for service_name, ii in shard_service_d.items():
         nodes = ii.get("nodes")
         port = ii.get("port")
 
-        ring = ConsistentHashRing(1000, nodes)
-        SERVICE_HASH_MAP[service_name] = ring
         for host in nodes:
-            res = consul_obj.register_service(
-                service_name, host, int(port)
-            )
-            logging.info("[register_service_res:{}][service:{}][node:{},port:{}]".format(
-                res, service_name, host, port
-            ))
+            one_service_id = "{}_{}_{}".format(service_name, host, port)
+            this_service = all_service.get(one_service_id)
+            if not this_service:
+                # 说明服务不存在，需要注册
+
+                res = consul_obj.register_service(
+                    service_name, host, int(port)
+                )
+                logging.info("[new_service_need_register][register_service_res:{}][service:{}][node:{},port:{}]".format(
+                    res, service_name, host, port
+                ))
+        # 给新注册的服务探测时间
+        time.sleep(1)
+        alive_nodes = consul_obj.get_service_health_node(service_name)
+
+        ring = ConsistentHashRing(1000, alive_nodes)
+        service_hash_map[service_name] = ring
 
         M_SHARD_SERVICE_DES.labels(service_name=service_name, service_port=port).set(1)
 
-    # 开启watch变化结果队列消费线程
-    consumer_thread = Thread(target=consumer, kwargs={'sync_dq': sync_dq})
-    consumer_thread.setDaemon(True)
-    consumer_thread.start()
+    # step_2 开启watch变化结果队列消费进程
+    p_consumer = Process(target=consumer, args=(sync_q, service_hash_map, config))
+    p_consumer.start()
 
-    # 开启consul watch
+    # step_3 开启consul watch 进程
     for service_name in shard_service_d.keys():
-        t = Thread(target=consul_obj.block_get_health, args=(service_name, SERVICE_HASH_MAP, sync_dq))
-        t.setDaemon(True)
-        t.start()
+        p = Process(target=consul_obj.watch_service, args=(service_name, service_hash_map, sync_q))
+        p.start()
 
-    # metrics server
-    start_http_server(int(ALL_CONFIG_DIC.get("http").get("port")))
+    # step_4 开启metrics server统计线程
+    # 但是这个库是线程模式，在多进程中不work
+    start_http_server(int(config.get("http").get("port")))
+    logging.info("[start_metrics_server:{}]".format(port))
+    # step_5 主进程：开启定时同步target并发往采集器进程
 
-    # ticker 刷新target并send
-    run_sync_target_thread()
+    run_sync_targets(service_hash_map, config)
 
 
 if __name__ == '__main__':
-    import sys
-
     cf = "config.yaml"
-    if len(sys.argv) == 2 and sys.argv[1] == "test":
-        cf = "test_config.yaml"
 
     run(cf)

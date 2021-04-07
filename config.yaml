@@ -2,30 +2,41 @@ shard_service:
   scrape_prome_ecs_inf:  # inf ecs
     desc: inf ecs 监控
     nodes:
-      - localhost1
-      - localhost2
-    port: 9090
+      - 172.20.70.205
+      - 172.20.70.215
+    port: 9091
     dest_sd_file_name: file_sd_by_prome_shared.json
-    yaml_path: copy_file_and_reload_prome.yaml
+    yaml_path: ./copy_file_and_reload_prome.yaml
 
 
-  scrape_prome_ecs_middleware :
-    desc: 中间件监控：kafka/es/zk elb
+  scrape_prome_ecs_bigdata:  # inf ecs
+    desc: bigdata ecs 监控
     nodes:
-      - localhost1
-      - localhost2
-    port: 9090
+      - 172.20.70.205
+      - 172.20.70.215
+    port: 9091
     dest_sd_file_name: file_sd_by_prome_shared.json
-    yaml_path: copy_file_and_reload_prome.yaml
+    yaml_path: ./copy_file_and_reload_prome.yaml
+
+
+#  scrape_prome_ecs_middleware:
+#    desc: 中间件监控：kafka/es/zk elb
+#    nodes:
+#      - localhost1
+#      - localhost2
+#    port: 9090
+#    dest_sd_file_name: file_sd_by_prome_shared.json
+#    yaml_path: copy_file_and_reload_prome.yaml
+
 
 
 
 
 job_setting:
-  ticker_interval: 300
+  ticker_interval: 10
 
 http:
   port: 8801
 consul:
-  host: localhost
+  host: 172.20.70.205
   port: 8500

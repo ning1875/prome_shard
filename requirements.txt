@@ -1,8 +1,7 @@
 # yum install python3-devel  -y
 python-consul
 PyYaml
-aiohttp
 mmh3
-ansible
-
-
+#ansible
+prometheus-client
+multiprocessing-logging

@@ -11,7 +11,14 @@ from ansible.plugins.callback import CallbackBase
 from ansible import context
 
 import ansible.constants as C
+import logging
 
+
+# logging.basicConfig(
+#     format='%(asctime)s %(levelname)s %(filename)s [func:%(funcName)s] [line:%(lineno)d]:%(message)s',
+#     datefmt="%Y-%m-%d %H:%M:%S",
+#     level="INFO"
+# )
 
 class ResultCallback(CallbackBase):
     """
@@ -161,9 +168,14 @@ class MyAnsiable2():
 
 def run_play_with_res(ips, yaml_path, extra_vars):
     t = MyAnsiable2()
-    # print("run_play", ips, yaml_path, extra_vars)
-
-    t.playbookrun(ips, [yaml_path], extra_vars)
+    msg = "[run_play][ips:{}][yaml_path:{}][extra_vars:{}]".format(
+        ips,
+        yaml_path,
+        extra_vars,
+    )
+    # logging.info(msg)
+    res = t.playbookrun(ips, [yaml_path], extra_vars)
+    # logging.info("[res:{}]".format(res))
     return t.get_result()
 
 
@@ -177,8 +189,8 @@ def run_play(ips, yaml_path, extra_vars):
 
 
 if __name__ == "__main__":
-    host_list = ["localhost"]
-    res = run_play(host_list, "./copy_file_and_reload_prome.yaml", extra_vars={
+    host_list = ["172.20.70.215"]
+    res = run_play_with_res(host_list, "./copy_file_and_reload_prome.yaml", extra_vars={
         "src_sd_file_name": "requirements.txt",
         "dest_sd_file_name": "requirements.txt",
         "service_port": 9090,
